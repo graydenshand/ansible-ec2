@@ -1,0 +1,10 @@
+[project]
+name = "pg-hosting"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "ansible>=13.3.0",
+    "aws-cdk-lib>=2.239.0",
+]
