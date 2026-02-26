@@ -1,0 +1,11 @@
+---
+services:
+  openssh-server:
+    build:
+      context: .
+      dockerfile: images/test.Dockerfile
+    container_name: ec2-sim
+    ports:
+      - "2222:22"
+    # Keep container running
+    restart: unless-stopped

@@ -10,3 +10,4 @@ wheels/
 .venv
 cdk.out
 .python-version
+ansible_key*
