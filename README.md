@@ -23,3 +23,7 @@ ssh-keygen -t ed25519 -f ansible_key -N ""
 docker compose up --build
 ansible-playbook -i inventories/docker.yml playbooks/hello_world.yml
 ```
+
+## Playbooks
+
+- playbooks/pg_install.yml: Install and start a postgres server that you can connect to remotely

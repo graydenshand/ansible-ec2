@@ -1,0 +1,77 @@
+---
+- name: "Install Postgres"
+  hosts: hosts
+  become: yes
+  vars_prompt:
+    - name: pg_password
+      prompt: "Enter password for the postgres user"
+      private: true
+      confirm: true
+  tasks:
+    - name: Update dnf
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+
+    - name: Install acl
+      ansible.builtin.dnf:
+        name: acl
+        state: present
+
+    - name: Install Postgres
+      ansible.builtin.dnf:
+        name:
+          - postgresql17-server
+          - postgresql17
+        state: present
+
+    - name: Install psycopg2
+      ansible.builtin.dnf:
+        name: python3-psycopg2
+        state: present
+
+    - name: Check if PostgreSQL is already initialized
+      ansible.builtin.stat:
+        path: /var/lib/pgsql/data/PG_VERSION
+      register: pgdata
+
+    - name: Initialize the PostgreSQL database
+      become: true
+      become_user: postgres
+      ansible.builtin.command:
+        cmd: "/bin/initdb -D /var/lib/pgsql/data"
+      when: not pgdata.stat.exists
+
+    - name: Configure PostgreSQL to listen on all interfaces
+      become_user: root
+      ansible.builtin.lineinfile:
+        path: /var/lib/pgsql/data/postgresql.conf
+        regexp: "^#?listen_addresses"
+        line: "listen_addresses = '*'"
+      notify: Restart PostgreSQL
+
+    - name: Allow remote connections in pg_hba.conf
+      ansible.builtin.lineinfile:
+        path: /var/lib/pgsql/data/pg_hba.conf
+        line: "host    all             all             0.0.0.0/0               scram-sha-256"
+      notify: Restart PostgreSQL
+
+    - name: Ensure the PostgreSQL service is started and enabled at boot
+      ansible.builtin.systemd:
+        name: "postgresql"
+        state: started
+        enabled: true
+        daemon_reload: yes
+
+    - name: Create PostgreSQL user
+      community.postgresql.postgresql_user:
+        name: postgres
+        password: "{{ pg_password }}"
+      become: true
+      become_user: postgres
+
+  handlers:
+    - name: Restart PostgreSQL
+      ansible.builtin.systemd:
+        name: postgresql
+        state: restarted

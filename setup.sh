@@ -24,9 +24,9 @@ myhosts:
       ansible_ssh_private_key_file: ${KEY_FILE}
       ansible_user: ec2-user
 EOF
-echo "$MULTILINE_VAR" > inventories/ec2.yml
+echo "$MULTILINE_VAR" > inventories/${RHOST}.yml
 
 echo "testing connection"
-ansible-playbook -i inventory.yml playbooks/hello_world.yml
+ansible-playbook -i inventories/${RHOST}.yml playbooks/hello_world.yml
 
 echo "done"

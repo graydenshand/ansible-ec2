@@ -1,6 +1,6 @@
 all:
   hosts:
-    local-test:
+    hosts:
       ansible_host: localhost
       ansible_port: 2222
       ansible_user: ansible

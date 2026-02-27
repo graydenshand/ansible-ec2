@@ -7,5 +7,7 @@ services:
     container_name: ec2-sim
     ports:
       - "2222:22"
+      - 5433:5432
     # Keep container running
     restart: unless-stopped
+    privileged: true

@@ -37,5 +37,6 @@ RUN sed -i \
     /etc/ssh/sshd_config
 
 EXPOSE 2222
+EXPOSE 5432
 
-CMD ["/usr/sbin/sshd", "-D", "-e"]
+CMD ["/usr/sbin/init", "-D", "-e"]
