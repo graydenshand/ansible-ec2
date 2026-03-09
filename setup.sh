@@ -6,6 +6,7 @@
 echo "fetching stack outputs"
 RHOST=$(aws cloudformation describe-stacks --stack-name PostgresStack --query "Stacks[0].Outputs[?contains(OutputKey, 'InstancePublicIp')].OutputValue | [0]" --output text)
 KEY_NAME=$(aws cloudformation describe-stacks --stack-name PostgresStack --query "Stacks[0].Outputs[?contains(OutputKey, 'ParameterName')].OutputValue | [0]" --output text)
+BACKUP_BUCKET=$(aws cloudformation describe-stacks --stack-name PostgresStack --query "Stacks[0].Outputs[?contains(OutputKey, 'BackupBucketName')].OutputValue | [0]" --output text)
 
 echo "downloading ssh key"
 KEY_FILE=~/.ssh/pg-hosting.pem
@@ -23,6 +24,7 @@ myhosts:
       ansible_host: ${RHOST}
       ansible_ssh_private_key_file: ${KEY_FILE}
       ansible_user: ec2-user
+      pg_backup_bucket: ${BACKUP_BUCKET}
 EOF
 echo "$MULTILINE_VAR" > inventories/${RHOST}.yml
 

@@ -1,0 +1,81 @@
+---
+- name: "Configure PostgreSQL backups to S3"
+  hosts: hosts
+  become: yes
+  vars:
+    pg_backup_databases:
+      - postgres
+    pg_backup_s3_prefix: backups
+    pg_backup_cron_minute: "0"
+    pg_backup_cron_hour: "3"
+    pg_backup_cron_day: "*"
+    pg_backup_cron_month: "*"
+    pg_backup_cron_weekday: "*"
+    pg_backup_dry_run: false
+    pg_backup_dir: /var/lib/pgsql/backups
+
+  tasks:
+    - name: Install AWS CLI v2 and cronie
+      ansible.builtin.dnf:
+        name:
+          - awscli-2
+          - cronie
+        state: present
+
+    - name: Ensure crond is started and enabled
+      ansible.builtin.systemd:
+        name: crond
+        state: started
+        enabled: true
+
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: "{{ pg_backup_dir }}"
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0750"
+
+    - name: Deploy backup script
+      ansible.builtin.template:
+        src: ../templates/pg_backup.sh.j2
+        dest: /usr/local/bin/pg_backup.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Configure cron job for backups
+      ansible.builtin.cron:
+        name: pg_backup
+        user: postgres
+        minute: "{{ pg_backup_cron_minute }}"
+        hour: "{{ pg_backup_cron_hour }}"
+        day: "{{ pg_backup_cron_day }}"
+        month: "{{ pg_backup_cron_month }}"
+        weekday: "{{ pg_backup_cron_weekday }}"
+        job: "/usr/local/bin/pg_backup.sh >> /var/log/pg_backup.log 2>&1"
+
+    - name: Create backup log file
+      ansible.builtin.file:
+        path: /var/log/pg_backup.log
+        state: touch
+        owner: postgres
+        group: postgres
+        mode: "0644"
+        modification_time: preserve
+        access_time: preserve
+
+    - name: Configure logrotate for backup log
+      ansible.builtin.copy:
+        dest: /etc/logrotate.d/pg_backup
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          /var/log/pg_backup.log {
+              weekly
+              rotate 4
+              compress
+              missingok
+              notifempty
+          }

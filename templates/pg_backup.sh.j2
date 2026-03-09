@@ -1,0 +1,39 @@
+#!/bin/bash
+# PostgreSQL backup script — managed by Ansible
+# Logs to /var/log/pg_backup.log
+
+set -euo pipefail
+
+BACKUP_DIR="{{ pg_backup_dir | default('/var/lib/pgsql/backups') }}"
+S3_BUCKET="{{ pg_backup_bucket }}"
+S3_PREFIX="{{ pg_backup_s3_prefix | default('backups') }}"
+DRY_RUN="{{ pg_backup_dry_run | default(false) | lower }}"
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+LOG=/var/log/pg_backup.log
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG"
+}
+
+log "Starting PostgreSQL backup (dry_run=${DRY_RUN})"
+
+{% for db in pg_backup_databases | default(['postgres']) %}
+DB="{{ db }}"
+DUMP_FILE="${BACKUP_DIR}/${DB}_${TIMESTAMP}.dump"
+
+log "Dumping database: ${DB}"
+pg_dump --format=custom --dbname="${DB}" --file="${DUMP_FILE}"
+
+if [ "$DRY_RUN" = "true" ]; then
+    log "Dry run — skipping S3 upload for ${DB}"
+    rm -f "${DUMP_FILE}"
+else
+    S3_KEY="${S3_PREFIX}/${DB}_${TIMESTAMP}.dump"
+    log "Uploading ${DUMP_FILE} to s3://${S3_BUCKET}/${S3_KEY}"
+    aws s3 cp "${DUMP_FILE}" "s3://${S3_BUCKET}/${S3_KEY}"
+    rm -f "${DUMP_FILE}"
+    log "Upload complete for ${DB}"
+fi
+{% endfor %}
+
+log "Backup run finished"

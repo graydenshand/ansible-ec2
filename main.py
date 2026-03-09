@@ -80,11 +80,32 @@ if __name__ == "__main__":
         volume=cdk.aws_ec2.BlockDeviceVolume.ebs(20),
         public_ports=[22, 5432],
     )
+
+    # S3 bucket for PostgreSQL backups with 30-day lifecycle expiration
+    backup_bucket = cdk.aws_s3.Bucket(
+        stack,
+        "PgBackupBucket",
+        removal_policy=cdk.RemovalPolicy.DESTROY,
+        lifecycle_rules=[
+            cdk.aws_s3.LifecycleRule(
+                expiration=cdk.Duration.days(30),
+            )
+        ],
+    )
+
+    # IAM role granting EC2 instance access to the backup bucket
+    backup_policy = cdk.aws_iam.PolicyStatement(
+        actions=["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
+        resources=[backup_bucket.bucket_arn, f"{backup_bucket.bucket_arn}/*"],
+    )
+    instance.instance.add_to_role_policy(backup_policy)
+
     cdk.CfnOutput(
         stack,
         "KeyPairPrivateKeyParameterName",
         value=instance.key_pair_parameter_name,
     )
     cdk.CfnOutput(stack, "InstancePublicIp", value=instance.public_ip)
+    cdk.CfnOutput(stack, "BackupBucketName", value=backup_bucket.bucket_name)
 
     app.synth()
