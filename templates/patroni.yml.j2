@@ -1,0 +1,65 @@
+scope: {{ patroni_scope | default('pg-cluster') }}
+name: {{ patroni_node_name }}
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: {{ patroni_connect_address }}:8008
+
+{% if patroni_use_raft | default(false) %}
+raft:
+  data_dir: /var/lib/patroni/raft
+  self_addr: {{ patroni_connect_address }}:2380
+  partner_addrs:
+{% for addr in patroni_partner_addrs | default([]) %}
+    - {{ addr }}:2380
+{% endfor %}
+{% else %}
+dynamodb:
+  table: {{ patroni_dynamodb_table }}
+  region: {{ aws_region | default('us-east-1') }}
+{% endif %}
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        max_wal_senders: 5
+        max_replication_slots: 5
+        wal_keep_size: 128MB
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+  pg_hba:
+    - host replication replicator 0.0.0.0/0 scram-sha-256
+    - host all all 0.0.0.0/0 scram-sha-256
+  users:
+    postgres:
+      password: "{{ pg_password }}"
+      options: [createrole, createdb]
+    replicator:
+      password: "{{ pg_replication_password }}"
+      options: [replication]
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: {{ patroni_connect_address }}:5432
+  data_dir: /var/lib/pgsql/data
+  bin_dir: /usr/bin
+  pgpass: /tmp/pgpass0
+  authentication:
+    superuser:
+      username: postgres
+      password: "{{ pg_password }}"
+    replication:
+      username: replicator
+      password: "{{ pg_replication_password }}"
+  parameters:
+    unix_socket_directories: /var/run/postgresql

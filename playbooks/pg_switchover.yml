@@ -1,0 +1,28 @@
+---
+- name: "Patroni manual switchover"
+  hosts: all
+  run_once: true
+  become: yes
+  become_user: postgres
+  vars_prompt:
+    - name: target_node
+      prompt: "Switch leadership to which node?"
+      private: false
+  tasks:
+    - name: Perform switchover
+      command: >
+        patronictl -c /etc/patroni/patroni.yml switchover
+        --candidate {{ target_node }} --force
+      register: switchover_result
+
+    - name: Print switchover result
+      debug:
+        msg: "{{ switchover_result.stdout }}"
+
+    - name: Show cluster state
+      command: patronictl -c /etc/patroni/patroni.yml list
+      register: cluster_state
+
+    - name: Print cluster state
+      debug:
+        msg: "{{ cluster_state.stdout }}"

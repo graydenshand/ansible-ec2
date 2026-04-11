@@ -1,0 +1,122 @@
+---
+- name: "Deploy Patroni HA PostgreSQL"
+  hosts: all
+  become: yes
+  vars_prompt:
+    - name: pg_password
+      prompt: "Enter password for the postgres user"
+      private: true
+      confirm: true
+    - name: pg_replication_password
+      prompt: "Enter password for the replication user"
+      private: true
+      confirm: true
+  tasks:
+    - name: Install PostgreSQL and dependencies
+      dnf:
+        name:
+          - postgresql17-server
+          - postgresql17
+          - python3-psycopg2
+          - python3-pip
+          - python3-packaging
+          - python3-setuptools
+          - acl
+        state: present
+
+    - name: Install Patroni with DynamoDB and Raft support
+      pip:
+        name: "patroni[dynamodb,raft]"
+        executable: pip3
+
+    - name: Create /etc/patroni directory
+      file:
+        path: /etc/patroni
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0750"
+
+    - name: Create raft data directory (local testing)
+      file:
+        path: /var/lib/patroni/raft
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: "0750"
+      when: patroni_use_raft | default(false)
+
+    - name: Deploy Patroni configuration
+      template:
+        src: ../templates/patroni.yml.j2
+        dest: /etc/patroni/patroni.yml
+        owner: postgres
+        group: postgres
+        mode: "0640"
+      notify: Restart patroni
+
+    - name: Deploy Patroni systemd unit
+      copy:
+        dest: /etc/systemd/system/patroni.service
+        content: |
+          [Unit]
+          Description=Patroni PostgreSQL HA
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=postgres
+          Group=postgres
+          ExecStart=/usr/local/bin/patroni /etc/patroni/patroni.yml
+          Restart=on-failure
+          RestartSec=5s
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: "0644"
+      notify: Restart patroni
+
+    - name: Stop and disable postgresql service (Patroni manages postgres)
+      systemd:
+        name: postgresql
+        state: stopped
+        enabled: false
+      ignore_errors: true
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: true
+
+    - name: Start and enable Patroni
+      systemd:
+        name: patroni
+        state: started
+        enabled: true
+
+    - name: Wait for Patroni REST API to be healthy
+      uri:
+        url: "http://localhost:8008/readiness"
+        method: GET
+        status_code: 200
+      register: health_check
+      retries: 30
+      delay: 5
+      until: health_check.status == 200
+
+    - name: Show cluster state
+      uri:
+        url: "http://localhost:8008/cluster"
+        method: GET
+        return_content: true
+      register: cluster_state
+
+    - name: Print cluster state
+      debug:
+        msg: "{{ cluster_state.json }}"
+
+  handlers:
+    - name: Restart patroni
+      systemd:
+        name: patroni
+        state: restarted
+        daemon_reload: true

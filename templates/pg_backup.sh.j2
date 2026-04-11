@@ -4,6 +4,15 @@
 
 set -euo pipefail
 
+# If Patroni is running, only back up on the primary
+if curl -sf http://localhost:8008 > /dev/null 2>&1; then
+    ROLE=$(curl -s http://localhost:8008 | python3 -c "import sys,json; print(json.load(sys.stdin).get('role','unknown'))")
+    if [ "$ROLE" != "master" ] && [ "$ROLE" != "primary" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - Not primary (role=$ROLE), skipping backup" >> /var/log/pg_backup.log
+        exit 0
+    fi
+fi
+
 BACKUP_DIR="{{ pg_backup_dir | default('/var/lib/pgsql/backups') }}"
 S3_BUCKET="{{ pg_backup_bucket }}"
 S3_PREFIX="{{ pg_backup_s3_prefix | default('backups') }}"
