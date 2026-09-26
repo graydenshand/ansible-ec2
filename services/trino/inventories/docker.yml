@@ -6,5 +6,6 @@ all:
       ansible_user: ansible
       ansible_ssh_private_key_file: ./ansible_key
       ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
-      # keep the heap small enough for Docker Desktop's default VM
+      # fixed heap: inside a container, ansible_memtotal_mb reports the whole
+      # Docker VM's memory rather than the container's limit
       trino_jvm_heap: 2G

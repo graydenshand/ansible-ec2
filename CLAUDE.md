@@ -41,12 +41,12 @@ The purpose of this project is configuring AWS EC2 instances using Ansible.
 - `templates/patroni.yml.j2`: Patroni configuration template; supports DynamoDB DCS (production) or Raft DCS (`patroni_use_raft: true`, local testing)
 
 ### trino
-- `stack.py`: `TrinoStack` CDK stack (single t4g.large instance + S3 bucket + Glue IAM for the Iceberg catalog; port 8080 not public, use an SSH tunnel)
+- `stack.py`: `TrinoStack` CDK stack (single EC2 instance, `instance_type` default t4g.large; S3 bucket, created or imported via `bucket_name`; Glue IAM for the Iceberg catalog; port 8080 not public, use an SSH tunnel)
 - `setup.sh`: fetches stack outputs and generates inventory, including an `iceberg` catalog (Glue metastore, S3 warehouse) in `trino_catalogs`
 - `docker-compose.yml`: single-container local testing environment (host ports 2222 → SSH, 8081 → Trino)
-- `inventories/docker.yml`: local inventory for docker testing (smaller JVM heap)
+- `inventories/docker.yml`: local inventory for docker testing (fixed 2G JVM heap, since container RAM facts are unreliable)
 - `playbooks/trino_install.yml`: install Java 25 + Trino tarball from GitHub releases, deploy config/catalogs (stale catalog files are removed), run as systemd service, smoke test via tpch (plus an Iceberg round-trip when an `iceberg` catalog is configured)
-- `playbooks/group_vars/all.yml`: variable defaults (`trino_version`, `trino_jvm_heap`, `trino_catalogs`, ...); kept out of play vars so inventories can override them
+- `playbooks/group_vars/all.yml`: variable defaults (`trino_version`, `trino_jvm_heap` (derived from `ansible_memtotal_mb` × `trino_jvm_heap_ratio`), `trino_catalogs`, ...); kept out of play vars so inventories can override them
 - `templates/`: `config.properties`, `node.properties`, `jvm.config`, `log.properties`, per-catalog properties, and the systemd unit
 
 As you make changes, keep README.md and CLAUDE.md (this file) up to date.

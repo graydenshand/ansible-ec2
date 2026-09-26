@@ -9,6 +9,11 @@ cdk deploy Trino
 ./setup.sh Trino
 ```
 
+`TrinoStack` takes two optional arguments (set them in `main.py`):
+
+- `instance_type` (default `t4g.large`): any Graviton or x86 type. The AMI matches its architecture, and the JVM heap is sized from its RAM (see `trino_jvm_heap_ratio`).
+- `bucket_name`: use an existing S3 bucket instead of creating one. An imported bucket is never deleted by `cdk destroy`.
+
 `setup.sh` downloads the SSH key and generates an inventory at `services/trino/inventories/Trino.yml`, then runs the hello_world playbook to confirm connectivity. The inventory configures an `iceberg` catalog alongside `tpch`.
 
 Then install Trino:
@@ -66,7 +71,8 @@ Key variables (defaults in `playbooks/group_vars/all.yml`, override in the inven
 | ------------------------- | ---------------------------------- | ------------------------------------------------------------- |
 | `trino_version`           | `"483"`                            | Trino release                                                 |
 | `trino_java_package`      | `java-25-amazon-corretto-headless` | JDK package                                                   |
-| `trino_jvm_heap`          | `5G`                               | `-Xmx`; ~70% of host RAM                                      |
+| `trino_jvm_heap_ratio`    | `0.7`                              | Fraction of host RAM used for the heap                        |
+| `trino_jvm_heap`          | host RAM × `trino_jvm_heap_ratio`  | `-Xmx`; set a fixed value (e.g. `2G`) to override             |
 | `trino_http_port`         | `8080`                             | HTTP port                                                     |
 | `trino_environment`       | `production`                       | `node.environment`                                            |
 | `trino_catalogs`          | `{tpch: {connector.name: tpch}}`   | Catalog name → properties (`setup.sh` adds `iceberg` for AWS) |

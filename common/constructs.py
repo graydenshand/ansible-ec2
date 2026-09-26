@@ -59,7 +59,12 @@ class Ec2Instance(Construct):
         instance_kwargs: dict[str, t.Any] = {
             "instance_type": instance_type,
             "machine_image": cdk.aws_ec2.MachineImage.latest_amazon_linux2023(
-                cpu_type=cdk.aws_ec2.AmazonLinuxCpuType.ARM_64
+                cpu_type=(
+                    cdk.aws_ec2.AmazonLinuxCpuType.ARM_64
+                    if instance_type.architecture
+                    == cdk.aws_ec2.InstanceArchitecture.ARM_64
+                    else cdk.aws_ec2.AmazonLinuxCpuType.X86_64
+                )
             ),
             "vpc": vpc,
             "key_pair": self.key_pair,

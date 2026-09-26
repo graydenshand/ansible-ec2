@@ -12,8 +12,11 @@ trino_user: trino
 
 trino_environment: production
 trino_http_port: 8080
-# ~70% of host RAM; t4g.large has 8 GiB
-trino_jvm_heap: 5G
+# -Xmx, derived from the host's RAM (ansible_memtotal_mb) so it follows the
+# instance type. The rest is left for off-heap memory and the OS. Override
+# trino_jvm_heap with a fixed value (e.g. "2G") where host RAM is misleading.
+trino_jvm_heap_ratio: 0.7
+trino_jvm_heap: "{{ (ansible_memtotal_mb * trino_jvm_heap_ratio) | int }}M"
 
 # Extra key/values appended to config.properties
 trino_config_properties: {}

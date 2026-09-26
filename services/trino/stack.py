@@ -13,7 +13,14 @@ class TrinoStack(cdk.Stack):
     configured yet); reach the coordinator through an SSH tunnel.
     """
 
-    def __init__(self, scope: Construct, id: str, **kwargs: t.Any) -> None:
+    def __init__(
+        self,
+        scope: Construct,
+        id: str,
+        bucket_name: str | None = None,
+        instance_type: str = "t4g.large",
+        **kwargs: t.Any,
+    ) -> None:
         super().__init__(scope, id, **kwargs)
 
         vpc = public_vpc(self)
@@ -21,19 +28,24 @@ class TrinoStack(cdk.Stack):
             self,
             "TrinoInstance",
             vpc=vpc,
-            # 8 GiB RAM; Trino's JVM heap is sized from this (see trino_jvm_heap)
-            instance_type=cdk.aws_ec2.InstanceType("t4g.large"),
+            # trino_jvm_heap is derived from the host's RAM, so any size works
+            instance_type=cdk.aws_ec2.InstanceType(instance_type),
             volume=cdk.aws_ec2.BlockDeviceVolume.ebs(30),
         )
 
-        bucket = cdk.aws_s3.Bucket(
-            self,
-            "TrinoBucket",
-            removal_policy=cdk.RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-            bucket_key_enabled=True,
-            encryption=cdk.aws_s3.BucketEncryption.S3_MANAGED,
-        )
+        if bucket_name is None:
+            bucket = cdk.aws_s3.Bucket(
+                self,
+                "TrinoBucket",
+                removal_policy=cdk.RemovalPolicy.DESTROY,
+                auto_delete_objects=True,
+                bucket_key_enabled=True,
+                encryption=cdk.aws_s3.BucketEncryption.S3_MANAGED,
+            )
+        else:
+            bucket = cdk.aws_s3.Bucket.from_bucket_name(
+                self, "TrinoBucket", bucket_name
+            )
         bucket.grant_read_write(instance.role)
 
         # Iceberg catalog: table pointers live in the Glue Data Catalog, data and
