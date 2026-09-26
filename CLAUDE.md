@@ -7,6 +7,7 @@ The purpose of this project is configuring AWS EC2 instances using Ansible.
 - `services/hello_world/`: connectivity test playbook
 - `services/postgres/`: single-node PostgreSQL deployment
 - `services/postgres_ha/`: two-node HA PostgreSQL with Patroni + DynamoDB
+- `services/trino/`: single-node Trino (tarball + systemd install)
 
 `common/`: shared CDK constructs (`Ec2Instance`, `public_vpc`) imported by service stacks.
 
@@ -38,5 +39,14 @@ The purpose of this project is configuring AWS EC2 instances using Ansible.
 - `playbooks/pg_patroni.yml`: install Patroni and deploy two-node HA PostgreSQL cluster (DynamoDB or Raft DCS)
 - `playbooks/pg_switchover.yml`: manual leader switchover via `patronictl`
 - `templates/patroni.yml.j2`: Patroni configuration template; supports DynamoDB DCS (production) or Raft DCS (`patroni_use_raft: true`, local testing)
+
+### trino
+- `stack.py`: `TrinoStack` CDK stack (single t4g.large instance + S3 bucket + Glue IAM for the Iceberg catalog; port 8080 not public, use an SSH tunnel)
+- `setup.sh`: fetches stack outputs and generates inventory, including an `iceberg` catalog (Glue metastore, S3 warehouse) in `trino_catalogs`
+- `docker-compose.yml`: single-container local testing environment (host ports 2222 → SSH, 8081 → Trino)
+- `inventories/docker.yml`: local inventory for docker testing (smaller JVM heap)
+- `playbooks/trino_install.yml`: install Java 25 + Trino tarball from GitHub releases, deploy config/catalogs (stale catalog files are removed), run as systemd service, smoke test via tpch (plus an Iceberg round-trip when an `iceberg` catalog is configured)
+- `playbooks/group_vars/all.yml`: variable defaults (`trino_version`, `trino_jvm_heap`, `trino_catalogs`, ...); kept out of play vars so inventories can override them
+- `templates/`: `config.properties`, `node.properties`, `jvm.config`, `log.properties`, per-catalog properties, and the systemd unit
 
 As you make changes, keep README.md and CLAUDE.md (this file) up to date.

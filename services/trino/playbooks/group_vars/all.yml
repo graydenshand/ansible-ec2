@@ -1,0 +1,24 @@
+# Defaults for trino_install.yml. Defined here (rather than as play vars) so
+# inventory host vars can override them.
+
+trino_version: "483"
+# Trino requires Java 25 exactly (newer versions are untested)
+trino_java_package: java-25-amazon-corretto-headless
+
+trino_install_dir: /opt/trino
+trino_etc_dir: /etc/trino
+trino_data_dir: /var/lib/trino/data
+trino_user: trino
+
+trino_environment: production
+trino_http_port: 8080
+# ~70% of host RAM; t4g.large has 8 GiB
+trino_jvm_heap: 5G
+
+# Extra key/values appended to config.properties
+trino_config_properties: {}
+
+# catalog name -> properties; each becomes etc/catalog/<name>.properties
+trino_catalogs:
+  tpch:
+    connector.name: tpch

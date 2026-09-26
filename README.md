@@ -15,6 +15,7 @@ uv sync   # or: pip install -e .
 | [hello_world](services/hello_world/README.md) | `HelloWorldStack` | Minimal EC2 instance for verifying Ansible connectivity |
 | [postgres](services/postgres/README.md) | `PostgresStack` | Single-node PostgreSQL with S3 backups |
 | [postgres_ha](services/postgres_ha/README.md) | `PostgresHAStack` | Two-node HA PostgreSQL with Patroni + DynamoDB |
+| [trino](services/trino/README.md) | `Trino` | Single-node Trino (coordinator + worker) |
 
 ## Usage
 
@@ -43,6 +44,7 @@ services/
   hello_world/   # connectivity test
   postgres/      # single-node PostgreSQL
   postgres_ha/   # two-node HA PostgreSQL
+  trino/         # single-node Trino
 common/          # shared CDK constructs (Ec2Instance, public_vpc)
 main.py          # CDK app entry point
 setup.sh         # dispatcher → calls services/<name>/setup.sh

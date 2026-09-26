@@ -1,0 +1,12 @@
+---
+services:
+  trino-node:
+    build:
+      context: ../..
+      dockerfile: images/test.Dockerfile
+    container_name: trino-sim
+    ports:
+      - "2222:22"
+      - "8081:8080"
+    restart: unless-stopped
+    privileged: true

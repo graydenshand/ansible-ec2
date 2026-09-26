@@ -39,19 +39,39 @@ class Ec2Instance(Construct):
                 )
             )
 
-        instance_kwargs: dict[str, t.Any] = dict(
-            instance_type=instance_type,
-            machine_image=cdk.aws_ec2.MachineImage.latest_amazon_linux2023(
+        security_group = cdk.aws_ec2.SecurityGroup(
+            self,
+            "SecurityGroup",
+            vpc=vpc,
+            allow_all_outbound=True,
+        )
+        security_group.add_ingress_rule(
+            peer=cdk.aws_ec2.Peer.any_ipv4(),
+            connection=cdk.aws_ec2.Port.tcp(22),
+            description="Allow SSH access from anywhere",
+        )
+        for port in public_ports or []:
+            security_group.add_ingress_rule(
+                peer=cdk.aws_ec2.Peer.any_ipv4(),
+                connection=cdk.aws_ec2.Port.tcp(port),
+                description=f"Allow TCP port {port} access from anywhere",
+            )
+        instance_kwargs: dict[str, t.Any] = {
+            "instance_type": instance_type,
+            "machine_image": cdk.aws_ec2.MachineImage.latest_amazon_linux2023(
                 cpu_type=cdk.aws_ec2.AmazonLinuxCpuType.ARM_64
             ),
-            vpc=vpc,
-            key_pair=self.key_pair,
-            block_devices=block_devices,
-        )
+            "vpc": vpc,
+            "key_pair": self.key_pair,
+            "block_devices": block_devices,
+            "security_group": security_group,
+        }
         if vpc_subnets is not None:
             instance_kwargs["vpc_subnets"] = vpc_subnets
 
         self.instance = cdk.aws_ec2.Instance(self, "Ec2Instance", **instance_kwargs)
+        self.security_group = security_group
+        self.role = self.instance.role
 
         self.instance.connections.allow_from_any_ipv4(
             cdk.aws_ec2.Port.tcp(5432), "Allow PostgreSQL access from anywhere"
@@ -78,7 +98,9 @@ def public_vpc(scope: Construct) -> cdk.aws_ec2.Vpc:
             )
         ],
     )
-    vpc.add_gateway_endpoint("S3Endpoint", service=cdk.aws_ec2.GatewayVpcEndpointAwsService.S3)
+    vpc.add_gateway_endpoint(
+        "S3Endpoint", service=cdk.aws_ec2.GatewayVpcEndpointAwsService.S3
+    )
     vpc.add_gateway_endpoint(
         "DynamoEndpoint", service=cdk.aws_ec2.GatewayVpcEndpointAwsService.DYNAMODB
     )

@@ -1,0 +1,8 @@
+# {{ ansible_managed }}
+coordinator=true
+node-scheduler.include-coordinator=true
+http-server.http.port={{ trino_http_port }}
+discovery.uri=http://localhost:{{ trino_http_port }}
+{% for key, value in trino_config_properties.items() %}
+{{ key }}={{ value }}
+{% endfor %}

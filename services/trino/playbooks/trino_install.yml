@@ -1,0 +1,179 @@
+---
+- name: "Install Trino"
+  hosts: all
+  become: yes
+  vars:
+    trino_release_dir: "{{ trino_install_dir }}/trino-server-{{ trino_version }}"
+    trino_download_url: "https://github.com/trinodb/trino/releases/download/{{ trino_version }}"
+  tasks:
+    - name: Install Java and archive tools
+      ansible.builtin.dnf:
+        name:
+          - "{{ trino_java_package }}"
+          - tar
+          - gzip
+          - python3
+        state: present
+
+    - name: Create trino user
+      ansible.builtin.user:
+        name: "{{ trino_user }}"
+        system: true
+        shell: /sbin/nologin
+        create_home: false
+
+    - name: Create install directory
+      ansible.builtin.file:
+        path: "{{ trino_install_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Create config and data directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ trino_user }}"
+        group: "{{ trino_user }}"
+        mode: "0755"
+      loop:
+        - "{{ trino_etc_dir }}"
+        - "{{ trino_etc_dir }}/catalog"
+        - "{{ trino_data_dir }}"
+
+    # Full tarball with all plugins (~850 MB)
+    - name: Download Trino server
+      ansible.builtin.get_url:
+        url: "{{ trino_download_url }}/trino-server-{{ trino_version }}.tar.gz"
+        dest: "{{ trino_install_dir }}/trino-server-{{ trino_version }}.tar.gz"
+        mode: "0644"
+        timeout: 300
+
+    - name: Extract Trino server
+      ansible.builtin.unarchive:
+        src: "{{ trino_install_dir }}/trino-server-{{ trino_version }}.tar.gz"
+        dest: "{{ trino_install_dir }}"
+        remote_src: true
+        creates: "{{ trino_release_dir }}/bin/launcher"
+
+    - name: Point current symlink at this release
+      ansible.builtin.file:
+        src: "{{ trino_release_dir }}"
+        dest: "{{ trino_install_dir }}/current"
+        state: link
+      notify: Restart Trino
+
+    - name: Install Trino CLI
+      ansible.builtin.get_url:
+        url: "{{ trino_download_url }}/trino-cli-{{ trino_version }}"
+        dest: /usr/local/bin/trino
+        mode: "0755"
+
+    - name: Deploy Trino config files
+      ansible.builtin.template:
+        src: "../templates/{{ item }}.j2"
+        dest: "{{ trino_etc_dir }}/{{ item }}"
+        owner: "{{ trino_user }}"
+        group: "{{ trino_user }}"
+        mode: "0644"
+      loop:
+        - config.properties
+        - node.properties
+        - jvm.config
+        - log.properties
+      notify: Restart Trino
+
+    - name: Deploy catalogs
+      ansible.builtin.template:
+        src: ../templates/catalog.properties.j2
+        dest: "{{ trino_etc_dir }}/catalog/{{ item.key }}.properties"
+        owner: "{{ trino_user }}"
+        group: "{{ trino_user }}"
+        mode: "0640"
+      loop: "{{ trino_catalogs | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      notify: Restart Trino
+
+    - name: Find deployed catalogs
+      ansible.builtin.find:
+        paths: "{{ trino_etc_dir }}/catalog"
+        patterns: "*.properties"
+      register: trino_deployed_catalogs
+
+    - name: Remove catalogs no longer in trino_catalogs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ trino_deployed_catalogs.files }}"
+      loop_control:
+        label: "{{ item.path | basename }}"
+      when: (item.path | basename | splitext | first) not in trino_catalogs
+      notify: Restart Trino
+
+    - name: Deploy systemd unit
+      ansible.builtin.template:
+        src: ../templates/trino.service.j2
+        dest: /etc/systemd/system/trino.service
+        mode: "0644"
+      notify: Restart Trino
+
+    - name: Ensure Trino is started and enabled at boot
+      ansible.builtin.systemd:
+        name: trino
+        state: started
+        enabled: true
+        daemon_reload: yes
+
+    # Apply any pending restart before the health check
+    - name: Flush handlers
+      ansible.builtin.meta: flush_handlers
+
+    - name: Wait for Trino to finish starting
+      ansible.builtin.uri:
+        url: "http://localhost:{{ trino_http_port }}/v1/info"
+        return_content: true
+      register: trino_info
+      until: trino_info.status == 200 and not trino_info.json.starting
+      retries: 30
+      delay: 5
+
+    - name: Run smoke test query
+      ansible.builtin.command:
+        cmd: >-
+          /usr/local/bin/trino --server http://localhost:{{ trino_http_port }}
+          --execute "SELECT count(*) FROM tpch.tiny.nation"
+      register: trino_smoke
+      changed_when: false
+      when: "'tpch' in trino_catalogs"
+
+    - name: Print smoke test result
+      ansible.builtin.debug:
+        msg: "tpch.tiny.nation row count: {{ trino_smoke.stdout }}"
+      when: "'tpch' in trino_catalogs"
+
+    # Round-trips a table through the catalog and object storage, then cleans up
+    - name: Run Iceberg smoke test
+      ansible.builtin.command:
+        cmd: >-
+          /usr/local/bin/trino --server http://localhost:{{ trino_http_port }}
+          --execute "
+          CREATE SCHEMA IF NOT EXISTS iceberg.trino_smoke_test;
+          CREATE OR REPLACE TABLE iceberg.trino_smoke_test.nation AS SELECT * FROM tpch.tiny.nation;
+          SELECT count(*) FROM iceberg.trino_smoke_test.nation;
+          DROP TABLE iceberg.trino_smoke_test.nation;
+          DROP SCHEMA iceberg.trino_smoke_test"
+      register: trino_iceberg_smoke
+      changed_when: false
+      when: "'iceberg' in trino_catalogs and 'tpch' in trino_catalogs"
+
+    - name: Print Iceberg smoke test result
+      ansible.builtin.debug:
+        msg: "iceberg.trino_smoke_test.nation row count: {{ trino_iceberg_smoke.stdout }}"
+      when: "'iceberg' in trino_catalogs and 'tpch' in trino_catalogs"
+
+  handlers:
+    - name: Restart Trino
+      ansible.builtin.systemd:
+        name: trino
+        state: restarted
+        daemon_reload: yes

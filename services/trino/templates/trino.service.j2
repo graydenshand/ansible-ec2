@@ -1,0 +1,18 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Trino
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ trino_user }}
+Group={{ trino_user }}
+ExecStart={{ trino_install_dir }}/current/bin/launcher run --etc-dir={{ trino_etc_dir }} --data-dir={{ trino_data_dir }}
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=131072
+LimitNPROC=128000
+
+[Install]
+WantedBy=multi-user.target
