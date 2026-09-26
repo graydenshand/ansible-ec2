@@ -2,7 +2,7 @@
 services:
   openssh-server:
     build:
-      context: .
+      context: ../..
       dockerfile: images/test.Dockerfile
     container_name: ec2-sim
     ports:

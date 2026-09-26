@@ -1,28 +1,42 @@
-`The purpose of this project is configuring AWS EC2 instances using Ansible.
+The purpose of this project is configuring AWS EC2 instances using Ansible.
 
-`docker-compose.yml` runs a testing environment that emulates an ec2 for local development and testing.
+## Structure
 
-`images`: docker images.
+`services/`: one subdirectory per deployment type; each is a Python package and contains its own CDK stack, playbooks, templates, inventories, and docker-compose file.
 
-`inventories`: ansible inventories.
+- `services/hello_world/`: connectivity test playbook
+- `services/postgres/`: single-node PostgreSQL deployment
+- `services/postgres_ha/`: two-node HA PostgreSQL with Patroni + DynamoDB
 
-`playbooks` contains ansible playbooks
-- `hello_world.yml`: hello world script to verify configuration
-- `pg_install.yml`: install and start postgres (standalone)
-- `pg_backup.yml`: configure scheduled pg_dump backups to S3 (requires `pg_backup_bucket` in inventory); leader-check guard skips backup on Patroni replicas
-- `pg_patroni.yml`: install Patroni and deploy two-node HA PostgreSQL cluster (DynamoDB or Raft DCS)
-- `pg_switchover.yml`: manual leader switchover via `patronictl`
+`common/`: shared CDK constructs (`Ec2Instance`, `public_vpc`) imported by service stacks.
 
-`templates/pg_backup.sh.j2`: Jinja2 template for the backup shell script deployed by `pg_backup.yml`.
+`images/`: Docker images used by all docker-compose files for local testing.
 
-`templates/patroni.yml.j2`: Jinja2 template for the Patroni configuration file deployed by `pg_patroni.yml`. Supports DynamoDB DCS (production) or Raft DCS (`patroni_use_raft: true`, local testing).
+`main.py`: CDK app entry point — imports and instantiates stacks from service modules.
 
-`main.py`: AWS CDK stacks — `PostgresStack` (single instance) and `PostgresHAStack` (two-node HA with Patroni + DynamoDB).
+`setup.sh`: dispatcher script; accepts a stack name argument and delegates to the matching service's own `setup.sh`. Each service setup script fetches its own CDK outputs, downloads the SSH key, and generates an inventory into its `inventories/` folder. Add a new `case` entry here when adding a new service.
 
-`setup.sh`: post-deploy script; accepts an optional stack name argument (`PostgresStack` or `PostgresHAStack`), downloads the SSH key, and generates an appropriate ansible inventory.
+## Services
 
-`docker-compose.ha.yml`: two-container setup (pg-node-1 and pg-node-2) for local HA testing.
+### hello_world
+- `stack.py`: `HelloWorldStack` CDK stack (minimal EC2 instance, no extra services)
+- `setup.sh`: fetches stack outputs and generates inventory
+- `playbooks/hello_world.yml`: ping hosts to verify Ansible connectivity
 
-`inventories/docker_ha.yml`: two-node inventory for local HA testing using Raft DCS.
+### postgres
+- `stack.py`: `PostgresStack` CDK stack (single EC2 instance + S3 backup bucket)
+- `docker-compose.yml`: single-container local testing environment
+- `inventories/docker.yml`: local inventory for docker testing
+- `playbooks/pg_install.yml`: install and start standalone postgres
+- `playbooks/pg_backup.yml`: configure scheduled pg_dump backups to S3 (requires `pg_backup_bucket` in inventory); leader-check guard skips backup on Patroni replicas
+- `templates/pg_backup.sh.j2`: Jinja2 template for the backup shell script
+
+### postgres_ha
+- `stack.py`: `PostgresHAStack` + `PostgresHACluster` CDK constructs (two EC2 instances, DynamoDB, NLB)
+- `docker-compose.ha.yml`: two-container (pg-node-1, pg-node-2) local HA testing
+- `inventories/docker_ha.yml`: two-node inventory for local HA testing using Raft DCS
+- `playbooks/pg_patroni.yml`: install Patroni and deploy two-node HA PostgreSQL cluster (DynamoDB or Raft DCS)
+- `playbooks/pg_switchover.yml`: manual leader switchover via `patronictl`
+- `templates/patroni.yml.j2`: Patroni configuration template; supports DynamoDB DCS (production) or Raft DCS (`patroni_use_raft: true`, local testing)
 
 As you make changes, keep README.md and CLAUDE.md (this file) up to date.

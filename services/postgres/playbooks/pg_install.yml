@@ -1,6 +1,6 @@
 ---
 - name: "Install Postgres"
-  hosts: hosts
+  hosts: all
   become: yes
   vars_prompt:
     - name: pg_password

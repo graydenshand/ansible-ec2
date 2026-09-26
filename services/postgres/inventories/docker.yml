@@ -1,6 +1,6 @@
 all:
   hosts:
-    hosts:
+    demo:
       ansible_host: localhost
       ansible_port: 2222
       ansible_user: ansible

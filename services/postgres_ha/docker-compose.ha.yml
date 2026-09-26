@@ -1,7 +1,7 @@
 services:
   pg-node-1:
     build:
-      context: .
+      context: ../..
       dockerfile: images/test.Dockerfile
     ports:
       - "2222:22"
@@ -14,7 +14,7 @@ services:
 
   pg-node-2:
     build:
-      context: .
+      context: ../..
       dockerfile: images/test.Dockerfile
     ports:
       - "2223:22"

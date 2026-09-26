@@ -1,6 +1,6 @@
 ---
 - name: "Configure PostgreSQL backups to S3"
-  hosts: hosts
+  hosts: all
   become: yes
   vars:
     pg_backup_databases:
